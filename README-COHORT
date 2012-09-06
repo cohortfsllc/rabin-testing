@@ -1,0 +1,157 @@
+I (Eric) found a basic implementation of a Rabin-fingerprint-based
+content-sensitive chunking and deduplication system at:
+
+    https://github.com/wurp/rabin-tool.git
+
+This code is GPL'd, as such we can use it for testing, but NONE of the
+code should end up in CohortFS. I significantly modified the
+command-line tool to support the gathering of data that we could use
+to determine the potential benefit (or lack thereof) of using this
+deduplication scheme. My updates (and yours?) can be found at (pushed
+to) our own repository:
+
+     git@10.1.1.55:cohort-rabin-testing.git
+
+BUILDING
+
+After downloading, run the top-level "configure" script, e.g.:
+
+    ./configure
+
+Then go into the src directory and run the "mkrabincmd.sh" script.
+
+     sh -c "cd src && ./mkrabincmd.sh"
+
+That should leave you with an executable named "rabin" under "src".
+
+RABIN COMMAND
+
+The rabin command itself has many options, those that existed in the
+original version and those that I've added for our purposes. Here are
+the key ones for our purposes:
+
+    -s stats-dir : the directory that the stats will be collected in
+
+    -b bits : how many 0 bits trigger a chunk end; default is 13,
+         which means that on average a chunk will be 8KB (2**13)
+
+    -m min-chunk-size : minimum chunk size; default is 2048 (2KB) as
+         that's what LBFS used
+
+    -M max-chunk-size : maximum chunk size;
+         default is 65536 (64KB) as that's what LBFS used
+
+    -l stats-dir-levels : The hashes of chunks are stored within
+         stats-dir. Since there could be a lot of them, putting them
+         all directly in stats-dir could make directory access there
+         inefficient. So each level you designate will use one hex
+         character from the front of the hash to create a
+         subdirectory. The final hash will be stored this many levels
+         beneath the stats-dir. For example, 21d77a90ea06c2ad.hash,
+         21d79a2fd4754808.hash, and 21d81ce87f6ba124.hash would all be
+         stored under <stats-dir>/2/1/d, since "2", "1", and "d" are
+         the first three hex characters in the hash. If the number of
+         levels is set to 0, then all .hash items would be directly
+         under stats-dir.
+
+    -n notation : a notation you can add to the chunk data; probably
+         not that useful
+
+In addition to the options, the "rabin" command takes *ONE* path to a
+file to analyze, stores its chunk data into the stats-dir. Since one
+would likely want to build stats recursively of a directory, there's a
+script named "rabin-recursive.sh" (described below) for this purpose.
+
+STRUCTURE OF COLLECTED STATS
+
+Within stats-dir, there will be a "*.hash" directory for each unique
+chunk that it finds. The hash of the chunk is 63 bits and uses the
+Rabin hashing algorithm, which should act well for testing purposes
+(i.e., hash collisions would be incredibly unlikely). CohortFS would
+likely use a larger, better tested, better understood, cryptographic
+hash (e.g., SHA-256).
+
+Within each "*.hash" directory, there will be a single "*.size" file,
+that indicates how many bytes were in that chunk. So the file
+"13878.size" indicates that chunk is 13,878 bytes long. The size is
+also the contents of the file, so "13878.size" would contain "13878".
+
+[NOTE: the actual data in the chunk is not stored, as it's unnecessary
+for our statistics. If you'd like to see the raw data, then issue the
+rabin command with the "-d data-dir" option. It would be best to make
+the stats-dir and data-dir separate.]
+
+In addition, to the "*.size" file, there should be one or more
+"*.stats" files in the "*.hash" directory. The name of the "*.hash"
+files has a very specific form:
+
+      notation-hostname-devid-inode-chunknum.stats
+
+The notation is that provided with the "-n" command-line argument. If
+no notation is provided, then the notation and the hyphen following it
+will not be in the file name. The hostname is the name of the host
+that the chunk is from. The devid is the device id on the host the
+chunk is from. And inode is the inode number of the file on the device
+that the chunk is from. Finally, chunknum is the chunk number of the
+chunk within the original file, where the first chunk is given a
+number of "0". As you might infer, this filename format is designed to
+create uniquely named stats files for every found chunk. If the same
+chunk appears in more than one file (or multiple times within the same
+file) there will be a "*.stats" file for each occurrence. Thus the
+number of "*.stats" files in a given "*.hash" directory tells us how
+many duplicates were found. In addition, the contents of the stats
+file contain the path to the file the chunk came from, the chunk
+number (same as in the file name), the starting offset of the chunk,
+the ending offset of the chunk, and the size of the chunk (which could
+also be found one directory level above in the "*.size" file).
+
+For example, the contents of the file:
+
+    stats-dir/7/7/7/7771d3189765f44b.hash/castle-2049-7602272-2599.stats
+
+could be:
+
+    file name: /home/eric/dload/eclipse-jee-helios-SR2-linux-gtk-x86_64.tar.gz
+    chunk number: 2599
+    start offset: 26376840
+    end offset: 26379049
+    size: 2210
+
+HELPING SCRIPTS
+
+In the main directory of the git repository, adjacent to the "src"
+directory is a "scripts" directory. Currently it contains two scripts.
+
+rabin-recursive.sh SCRIPT
+
+This script can be used to build statistics for all files within one
+or more specified directories. It takes the same options as those
+listed above for the rabin command (-s, -b, -m, -M, -l, -n) and one
+additional option (-c). The -s option is required, all others are
+optional. If the -l option is not specified, it will use a default
+value of 3. The -c option specifies the path to the rabin command, in
+case it's not on the PATH.
+
+In addition to the options, the command takes one or more paths to
+directories that it will recursively descend, processing each file it
+finds.
+
+An example, launch of the script might be:
+
+   ./rabin-recursive.sh -c ~/cohort-rabin-testing/src/rabin -s /stats /home
+
+which would build the data from all files underneath /home, put the
+stats in /stats, and references the rabin command built below one's
+home directory.
+
+analyze.sh SCRIPT
+
+This script takes a single argument, the path to the stats
+directory. It will then count up how many bytes would have been used
+both with and without content-sensitive chunking and deduplication,
+and the percentage saved with dedupliation. All calculations are done
+with the "expr", command, which likely uses the standard "int" on the
+system you're using. So if the system uses 32-bit ints and if the
+total number of bytes is expected to exceed 2.1 billion, then the
+script will likely produce erroneous results.
+
