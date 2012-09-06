@@ -1,7 +1,7 @@
 #!/bin/sh
 
 cmd="rabin"
-levels="-l 5"
+levels="-l 3"
 
 usage() {
     echo >&2 "Usage: $0 -s stats-dir [-c rabin-cmd] [-l stats-levels] [-n notation] [-b bits] [-m min-chunk] [-M max-chunk] index-dir ..."
