@@ -53,7 +53,7 @@ public:
     long idx = p >> shift;
     if( idx > (sizeof(T) / sizeof(*T)) )
     {
-      fprintf(stderr, "T index %d is out of bounds\n", idx);
+      fprintf(stderr, "T index %ld is out of bounds\n", idx);
     }
     return ((p << 8) | m) ^ T[idx];
   }

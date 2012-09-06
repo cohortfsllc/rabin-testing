@@ -76,7 +76,7 @@ void printChunkData(
     u_int64_t fingerprint,
     u_int64_t hash)
 {
-  fprintf(stderr, "%s chunk hash: %016llx fingerprint: %016llx length: %d\n",
+  fprintf(stderr, "%s chunk hash: %016lx fingerprint: %016lx length: %d\n",
          msgPrefix,
          hash,
          fingerprint,
@@ -88,7 +88,7 @@ void printChunkContents(
     const unsigned char* buffer,
     int size)
 {
-  fprintf(stderr, "Chunk with hash %016llx contains:\n");
+  fprintf(stderr, "Chunk with hash %016lx contains:\n", hash);
   for(int i = 0; i < size; ++i)
   {
     int tmp = buffer[i];
@@ -541,7 +541,7 @@ protected:
     //store the index of this chunk
     chunkLocations.push_back(currChunkBegin);
 
-    char *s;
+    char const *s;
     if( eds->isInPlaceChunk() )
     {
       s="";
