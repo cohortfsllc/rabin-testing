@@ -7,3 +7,6 @@ src/rabin
 src/verboseRabin
 out
 *.tmp.gz
+autom4te.cache
+config.log
+*~
