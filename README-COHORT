@@ -41,6 +41,12 @@ the key ones for our purposes:
     -M max-chunk-size : maximum chunk size;
          default is 65536 (64KB) as that's what LBFS used
 
+    -f fixed-chunk-size : use a fixed chunk size specified in bytes
+         (e.g., 4096, 8192); used to enable comparison of
+         variable-sized, content-based blocks to fix-sized
+         blocks. [Note: essentially this sets the min- and
+         max-chunk-size arguments to the size specified.]
+
     -l stats-dir-levels : The hashes of chunks are stored within
          stats-dir. Since there could be a lot of them, putting them
          all directly in stats-dir could make directory access there

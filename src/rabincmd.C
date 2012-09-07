@@ -916,6 +916,7 @@ public:
     int    bits;
     uint   maxChunkSize;
     uint   minChunkSize;
+    BOOL   minMaxWarnings;
 
     Options(int argc, char** argv)
         : compress      (FALSE),
@@ -925,6 +926,7 @@ public:
           bits          (13),
           maxChunkSize  (64 * 1024),
           minChunkSize  (2 * 1024),
+          minMaxWarnings(true),
           statsDirLevels(0)
     {
         setOptionsFromArguments(argc, argv);
@@ -935,8 +937,9 @@ public:
     {
         fprintf(stderr, "Flags:\n");
         fprintf(stderr, "-b <log2 of the average chunk length desired, default is 12>\n");
-        fprintf(stderr, "-M <maximum chunk size>\n");
-        fprintf(stderr, "-m <minimum chunk size>\n");
+        fprintf(stderr, "-M <maximum chunk size in bytes>\n");
+        fprintf(stderr, "-m <minimum chunk size in bytes>\n");
+        fprintf(stderr, "-f <fixed chunk size in bytes>\n");
         fprintf(stderr, "-d <directory in which to put/retrieve chunks>\n");
         fprintf(stderr, "-s <directory in which to put/retrieve chunk statistics>\n");
         fprintf(stderr, "-n <notation to prefix stats chunk files with, possibly to indicate host>\n");
@@ -964,7 +967,7 @@ public:
         extern char *optarg;
         extern int optind, optopt;
 
-        while ((c = getopt(argc, argv, ":cxprd:o:b:M:m:s:l:n:")) != -1) {
+        while ((c = getopt(argc, argv, ":cxprd:o:b:M:m:f:s:l:n:")) != -1) {
             switch(c) {
             case 'c':
                 compress = TRUE;
@@ -993,6 +996,12 @@ public:
                 break;
             case 'm':
                 minChunkSize = requireInt(optarg);
+                break;
+            case 'f':
+                maxChunkSize = requireInt(optarg);
+                minChunkSize = requireInt(optarg);
+                bits = 32;
+                minMaxWarnings = false;
                 break;
             case 's':
                 statsDir = optarg;
@@ -1073,38 +1082,33 @@ public:
 
         if( reconstruct && (chunkDir == "") )
             {
-                fprintf(stderr, "-r (reconstruct) requires -d (chunk directory) to be specified\n");
-                exit(-1);
+                errorOut("-r (reconstruct) requires -d (chunk directory)"
+                         " to be specified\n");
             }
 
         if (maxChunkSize != 0 && minChunkSize != 0) {
-            if (8 * minChunkSize > maxChunkSize) {
-                fprintf(stderr,
-                        "max chunk size (-M) should probably be at least"
-                        " 8 times as large as min chunk size (-m)\n");
-                exit(-1);
+            if (minChunkSize > maxChunkSize) {
+                errorOut("max chunk size (-M) should probably be at least"
+                         " 8 times as large as min chunk size (-m)\n");
             }
 
             const uint probableChunkSize = 1 << bits;
-            if (2 * probableChunkSize > maxChunkSize) {
+            if (minMaxWarnings && 2 * probableChunkSize > maxChunkSize) {
                 fprintf(stderr,
-                        "max chunk size (-M) should be at least 2 * 2**bits\n");
-                exit(-1);
-            } else if (probableChunkSize <= 2 * minChunkSize) {
+                        "WARNING: max chunk size (-M) should be at least"
+                        " 2 * 2**bits\n");
+            } else if (minMaxWarnings &&
+                       probableChunkSize <= 2 * minChunkSize) {
                 fprintf(stderr,
-                        "min chunk size (-m) should be no more than 0.5 * 2**bits\n");
-                exit(-1);
+                        "WARNING:min chunk size (-m) should be no more"
+                        " than 0.5 * 2**bits\n");
             }
         } else if (maxChunkSize != 0) {
-            fprintf(stderr,
-                    "if you specify -m (min chunk size) you must specify"
-                    " -M (max chunk size) as well\n");
-            exit(-1);
+            errorOut("if you specify -m (min chunk size) you must specify"
+                     " -M (max chunk size) as well\n");
         } else if (minChunkSize != 0) {
-            fprintf(stderr,
-                    "if you specify -M (max chunk size) you must specify"
-                    " -m (min chunk size) as well\n");
-            exit(-1);
+            errorOut("if you specify -M (max chunk size) you must specify"
+                     " -m (min chunk size) as well\n");
         }
     }
 };

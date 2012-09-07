@@ -7,7 +7,7 @@ usage() {
     echo >&2 "Usage: $0 -s stats-dir [-c rabin-cmd] [-l stats-levels] [-n notation] [-b bits] [-m min-chunk] [-M max-chunk] index-dir ..."
 }
 
-while getopts c:s:l:n:b:m:M: o ;do
+while getopts c:s:l:n:b:m:M:f: o ;do
 	case "$o" in
 	c)	cmd="$OPTARG";;
 	s)	statsDir="$OPTARG";;
@@ -16,6 +16,7 @@ while getopts c:s:l:n:b:m:M: o ;do
 	b)	bits="-b $OPTARG";;
 	m)	min="-m $OPTARG";;
 	M)	max="-M $OPTARG";;
+	f)	fixed="-f $OPTARG";;
 	[?])	usage
 		exit 1;;
 	esac
@@ -45,5 +46,7 @@ for d in "$@" ;do
 	echo >&2 "error: $d is not a directory; skipping"
 	continue
     fi
-    find "$d" -type f -exec $cmd -s $statsDir $levels $notation $bits $min $max {} \;
+    find "$d" -type f \
+         -exec $cmd -s $statsDir $levels $notation $bits $min $max \
+               $fixed {} \;
 done
