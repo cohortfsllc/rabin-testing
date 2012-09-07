@@ -94,10 +94,10 @@ void printChunkData(
                     u_int64_t fingerprint,
                     u_int64_t hash)
 {
-    fprintf(stderr, "%s chunk hash: %016lx fingerprint: %016lx length: %d\n",
+    fprintf(stderr, "%s chunk hash: %016llx fingerprint: %016llx length: %d\n",
             msgPrefix,
-            hash,
-            fingerprint,
+            (unsigned long long) hash,
+            (unsigned long long) fingerprint,
             size);
 }
 
@@ -105,7 +105,9 @@ void printChunkContents(u_int64_t hash,
                         const unsigned char* buffer,
                         int size)
 {
-    fprintf(stderr, "Chunk with hash %016lx contains:\n", hash);
+    fprintf(stderr,
+            "Chunk with hash %016llx contains:\n",
+            (unsigned long long) hash);
     for(int i = 0; i < size; ++i)
         {
             int tmp = buffer[i];
