@@ -419,7 +419,7 @@ protected:
         chunkNumber++;
     }
 
-    string getDir(string hash, int chunkSize) {
+    void makeDirs(string hash) {
         string dirPath = statsDir + "/";
         for (int l = 0; l < statsDirLevels; l++) {
             dirPath += hash.substr(l, 1) + "/";
@@ -428,20 +428,36 @@ protected:
                 errorOut("could not make directory \"%s\"\n", dirPath.c_str());
             }
         }
+    }
+
+    string getDir(string hash, int chunkSize) {
+        string dirPath = statsDir + "/";
+        for (int l = 0; l < statsDirLevels; l++) {
+            dirPath += hash.substr(l, 1) + "/";
+        }
 
         dirPath += hash + ".hash";
 
-        int result = mkdir(dirPath.c_str(), 0777);
-        if (0 != result) {
-            if (errno != EEXIST) {
-                errorOut("could not create directory \"%s\"\n",
-                         dirPath.c_str());
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            int result = mkdir(dirPath.c_str(), 0777);
+            if (0 != result) {
+                if (errno == EEXIST) {
+                    break;
+                } else {
+                    if (attempt == 1) {
+                        makeDirs(hash);
+                    } else {
+                        errorOut("could not create directory \"%s\"\n",
+                                 dirPath.c_str());
+                    }
+                }
+            } else {
+                string path = dirPath + "/" + toDecString(chunkSize) + ".size";
+                FILE* f = fopen(path.c_str(), "w");
+                fprintf(f, "%d\n", chunkSize);
+                fclose(f);
+                break;
             }
-        } else {
-            string path = dirPath + "/" + toDecString(chunkSize) + ".size";
-            FILE* f = fopen(path.c_str(), "w");
-            fprintf(f, "%d\n", chunkSize);
-            fclose(f);
         }
 
         return dirPath;
