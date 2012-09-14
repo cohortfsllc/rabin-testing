@@ -43,7 +43,7 @@ using namespace std;
 
 #define INT64(n) n##LL
 #define MSB64 INT64(0x8000000000000000)
-#define FINGERPRINT_PT 0xbfe6b8a5bf378d83LL	
+#define FINGERPRINT_PT 0xbfe6b8a5bf378d83LL
 
 typedef unsigned short BOOL;
 
@@ -472,7 +472,7 @@ public:
         : statsDir(statsDir), statsNotation(statsNotation),
           statsDirLevels(statsDirLevels),
           inputFileName(inputFileName),
-          chunkStart(0), offset(0), chunkNumber(0)
+          chunkStart(0), offset(-1), chunkNumber(0)
     {
         {
             char nameBuf[1024];
