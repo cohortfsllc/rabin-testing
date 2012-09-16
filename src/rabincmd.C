@@ -233,6 +233,8 @@ public:
 public:
     ChunkProcessor() : size(0) {}
 
+    virtual ~ChunkProcessor() {}
+
     void processByte(unsigned char c) 
     {
         internalProcessByte(c);
@@ -367,11 +369,14 @@ class StatsChunkProcessor : public ChunkProcessor
 private:
     string statsDir;
     string statsNotation;
+    string filePrefix;
     int statsDirLevels;
     string hostName;
     string inputFileName;
-    uint offset;
-    uint chunkStart;
+    unsigned long long offset;
+    unsigned long long chunkStart;
+    unsigned long zeroCount;
+    unsigned long long zeroBlocks;
     int chunkNumber;
     dev_t inputDevNo;
     ino_t inputInode;
@@ -380,15 +385,25 @@ private:
 protected:
     virtual void internalProcessByte(unsigned char c) {
         offset++;
+	if (c == 0) {
+	  zeroCount++;
+	} else {
+	  zeroCount = 0;
+	}
     }
 
     virtual void internalCompleteChunk(u_int64_t hash, u_int64_t fingerprint) {
-        int chunkSize = offset - chunkStart + 1;
+        int chunkSize = (int) (offset - chunkStart + 1);
+	if (zeroCount == chunkSize) {
+	  zeroBlocks++;
+	  zeroCount = 0;
+	  return;
+	}
+
         string hashString = toString(hash);
         string dir = getDir(hashString, chunkSize);
 
-        string statFileName = hostName + "-" + toDecString(inputDevNo)
-            + "-" + toDecString(inputInode) + "-"
+        string statFileName = filePrefix + "-"
             + toDecString(chunkNumber)+ ".stats";
 
         // if a notation is provided, use it to prefix the .stats file name
@@ -409,8 +424,8 @@ protected:
         }
 
         fprintf(f,
-                "file name: %s\nchunk number: %d\nstart offset: %lu\n"
-                "end offset: %lu\nsize: %lu\n",
+                "file name: %s\nchunk number: %d\nstart offset: %llu\n"
+                "end offset: %llu\nsize: %llu\n",
                 inputFileName.c_str(), chunkNumber, (unsigned long) chunkStart,
                 (unsigned long) offset, (unsigned long) chunkSize);
         fclose(f);
@@ -472,7 +487,8 @@ public:
         : statsDir(statsDir), statsNotation(statsNotation),
           statsDirLevels(statsDirLevels),
           inputFileName(inputFileName),
-          chunkStart(0), offset(-1), chunkNumber(0)
+	  chunkStart(0), offset(-1), chunkNumber(0),
+	  zeroCount(0), zeroBlocks(0)
     {
         {
             char nameBuf[1024];
@@ -503,14 +519,21 @@ public:
             errorOut("do not have full access to stats directory \"%s\"\n",
                     statsDir.c_str());
         }
+
+	filePrefix =  hostName + "-" + toDecString(inputDevNo)
+	  + "-" + toDecString(inputInode);
     }
 
-    ~StatsChunkProcessor()
+    virtual ~StatsChunkProcessor()
     {
+      printf("here1\n");
+      string zeroFileName = filePrefix + ".zeroes";
+      string zeroPath = statsDir + "/" + zeroFileName;
+      FILE* f = fopen(zeroPath.c_str(), "w");
+      fprintf(f, "%llu\n", zeroBlocks);
+      fclose(f);
+      printf("here\n");
     }
-
-
-
 }; // class StatsChunkProcessor
 
 
