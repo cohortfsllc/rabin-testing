@@ -367,72 +367,72 @@ public:
 class StatsChunkProcessor : public ChunkProcessor
 {
 private:
-    string statsDir;
-    string statsNotation;
-    string filePrefix;
-    int statsDirLevels;
-    string hostName;
-    string inputFileName;
-    unsigned long long offset;
-    unsigned long long chunkStart;
-    unsigned long zeroCount;
-    unsigned long long zeroBlocks;
-    int chunkNumber;
-    dev_t inputDevNo;
-    ino_t inputInode;
-    off_t expectedSize;
+  string statsDir;
+  string statsNotation;
+  string filePrefix;
+  int statsDirLevels;
+  string hostName;
+  string inputFileName;
+  unsigned long long offset;
+  unsigned long long chunkStart;
+  unsigned long zeroCount;
+  unsigned long long zeroBlocks;
+  int chunkNumber;
+  dev_t inputDevNo;
+  ino_t inputInode;
+  off_t expectedSize;
 
 protected:
-    virtual void internalProcessByte(unsigned char c) {
-        offset++;
-	if (c == 0) {
-	  zeroCount++;
-	} else {
-	  zeroCount = 0;
-	}
+  virtual void internalProcessByte(unsigned char c) {
+    offset++;
+    if (c == 0) {
+      zeroCount++;
+    } else {
+      zeroCount = 0;
+    }
+  }
+
+  virtual void internalCompleteChunk(u_int64_t hash, u_int64_t fingerprint) {
+    int chunkSize = (int) (offset - chunkStart + 1);
+
+    if (zeroCount >= chunkSize) {
+      zeroBlocks++;
+      zeroCount = 0;
+    } else {
+      string hashString = toString(hash);
+      string dir = getDir(hashString, chunkSize);
+
+      string statFileName = filePrefix + "-"
+	+ toDecString(chunkNumber)+ ".stats";
+
+      // if a notation is provided, use it to prefix the .stats file name
+      if (statsNotation != "") {
+	statFileName = statsNotation + "-" + statFileName;
+      }
+
+      string path = dir + "/" + statFileName;
+
+      int fd = creat(path.c_str(), 0777);
+      if (fd < 0) {
+	errorOut("could not open stats file \"%s\"\n", path.c_str());
+      }
+
+      FILE* f = fdopen(fd, "w");
+      if (f == NULL) {
+	errorOut("could not open write file \"%s\"\n", path.c_str());
+      }
+
+      fprintf(f,
+	      "file name: %s\nchunk number: %d\nstart offset: %llu\n"
+	      "end offset: %llu\nsize: %llu\n",
+	      inputFileName.c_str(), chunkNumber, (unsigned long) chunkStart,
+	      (unsigned long) offset, (unsigned long) chunkSize);
+      fclose(f);
     }
 
-    virtual void internalCompleteChunk(u_int64_t hash, u_int64_t fingerprint) {
-        int chunkSize = (int) (offset - chunkStart + 1);
-	if (zeroCount == chunkSize) {
-	  zeroBlocks++;
-	  zeroCount = 0;
-	  return;
-	}
-
-        string hashString = toString(hash);
-        string dir = getDir(hashString, chunkSize);
-
-        string statFileName = filePrefix + "-"
-            + toDecString(chunkNumber)+ ".stats";
-
-        // if a notation is provided, use it to prefix the .stats file name
-        if (statsNotation != "") {
-            statFileName = statsNotation + "-" + statFileName;
-        }
-
-        string path = dir + "/" + statFileName;
-
-        int fd = creat(path.c_str(), 0777);
-        if (fd < 0) {
-            errorOut("could not open stats file \"%s\"\n", path.c_str());
-        }
-
-        FILE* f = fdopen(fd, "w");
-        if (f == NULL) {
-            errorOut("could not open write file \"%s\"\n", path.c_str());
-        }
-
-        fprintf(f,
-                "file name: %s\nchunk number: %d\nstart offset: %llu\n"
-                "end offset: %llu\nsize: %llu\n",
-                inputFileName.c_str(), chunkNumber, (unsigned long) chunkStart,
-                (unsigned long) offset, (unsigned long) chunkSize);
-        fclose(f);
-
-        chunkStart = offset + 1;
-        chunkNumber++;
-    }
+    chunkStart = offset + 1;
+    chunkNumber++;
+  }
 
     void makeDirs(string hash) {
         string dirPath = statsDir + "/";
@@ -526,13 +526,11 @@ public:
 
     virtual ~StatsChunkProcessor()
     {
-      printf("here1\n");
       string zeroFileName = filePrefix + ".zeroes";
       string zeroPath = statsDir + "/" + zeroFileName;
       FILE* f = fopen(zeroPath.c_str(), "w");
       fprintf(f, "%llu\n", zeroBlocks);
       fclose(f);
-      printf("here\n");
     }
 }; // class StatsChunkProcessor
 
