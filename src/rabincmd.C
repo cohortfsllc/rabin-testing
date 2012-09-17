@@ -190,12 +190,19 @@ private:
     const int MAX_SIZE;
     const int MIN_SIZE;
 
+    // must declare after CHUNK_BOUNDARY_MASK for initalization list to work
+    // properly
+    const u_int64_t boundaryMarker;
+
 public:
-    SpecifiedChunkBoundaryChecker(int numBits, uint minChunkSize, uint maxChunkSize)
+    SpecifiedChunkBoundaryChecker(int numBits, uint minChunkSize,
+                                  uint maxChunkSize,
+                                  const u_int64_t boundaryM = 0)
         : BITS(numBits),
           CHUNK_BOUNDARY_MASK(makeBitMask(BITS)), 
           MAX_SIZE(maxChunkSize),
-          MIN_SIZE(minChunkSize)
+          MIN_SIZE(minChunkSize),
+          boundaryMarker(boundaryM & CHUNK_BOUNDARY_MASK)
     {
         //printf("bitmask: %16llx\n", chunkBoundaryBitMask);
         //exit(0);
@@ -203,7 +210,7 @@ public:
 
     virtual BOOL isBoundary(u_int64_t fingerprint, int size)
     {
-        return (((fingerprint & CHUNK_BOUNDARY_MASK) == 0 && size >= MIN_SIZE) ||
+        return (((fingerprint & CHUNK_BOUNDARY_MASK) == boundaryMarker && size >= MIN_SIZE) ||
                 (MAX_SIZE != -1 && size >= MAX_SIZE) );
     }
 
@@ -377,6 +384,7 @@ private:
   unsigned long long chunkStart;
   unsigned long zeroCount;
   unsigned long long zeroBlocks;
+  unsigned long zeroBlockSize;
   int chunkNumber;
   dev_t inputDevNo;
   ino_t inputInode;
@@ -395,9 +403,12 @@ protected:
   virtual void internalCompleteChunk(u_int64_t hash, u_int64_t fingerprint) {
     int chunkSize = (int) (offset - chunkStart + 1);
 
-    if (zeroCount >= chunkSize) {
+    if (chunkSize != 0 && zeroCount >= chunkSize) {
       zeroBlocks++;
       zeroCount = 0;
+      if (zeroBlockSize == 0) {
+	zeroBlockSize = chunkSize;
+      }
     } else {
       string hashString = toString(hash);
       string dir = getDir(hashString, chunkSize);
@@ -488,7 +499,7 @@ public:
           statsDirLevels(statsDirLevels),
           inputFileName(inputFileName),
 	  chunkStart(0), offset(-1), chunkNumber(0),
-	  zeroCount(0), zeroBlocks(0)
+	  zeroCount(0), zeroBlocks(0), zeroBlockSize(0)
     {
         {
             char nameBuf[1024];
@@ -529,7 +540,8 @@ public:
       string zeroFileName = filePrefix + ".zeroes";
       string zeroPath = statsDir + "/" + zeroFileName;
       FILE* f = fopen(zeroPath.c_str(), "w");
-      fprintf(f, "%llu\n", zeroBlocks);
+      fprintf(f, "zero blocks: %llu\nzero block size: %lu\n",
+	      zeroBlocks, zeroBlockSize);
       fclose(f);
     }
 }; // class StatsChunkProcessor
@@ -939,6 +951,26 @@ int requireInt(char* str)
 }
 
 
+
+long long requireLongLong(char* str)
+{
+    char *endptr;
+    long long result = strtoll(str, &endptr, 0);
+
+    if (errno != 0) {
+        fprintf(stderr, "%s is not a number\n", str);
+        exit(-1);
+    }
+
+    if (*str == '\0' || *endptr != '\0') {
+        fprintf(stderr, "%s is not a number\n", str);
+        exit(-1);
+    }
+
+    return result;
+}
+
+
 class Options
 {
 public:
@@ -956,6 +988,7 @@ public:
     uint   maxChunkSize;
     uint   minChunkSize;
     BOOL   minMaxWarnings;
+    u_int64_t boundaryMarker;
 
     Options(int argc, char** argv)
         : compress      (FALSE),
@@ -966,7 +999,8 @@ public:
           maxChunkSize  (64 * 1024),
           minChunkSize  (2 * 1024),
           minMaxWarnings(true),
-          statsDirLevels(0)
+          statsDirLevels(0),
+          boundaryMarker(0)
     {
         setOptionsFromArguments(argc, argv);
         validateOptionCombination();
@@ -978,6 +1012,7 @@ public:
         fprintf(stderr, "-b <log2 of the average chunk length desired, default is 12>\n");
         fprintf(stderr, "-M <maximum chunk size in bytes>\n");
         fprintf(stderr, "-m <minimum chunk size in bytes>\n");
+        fprintf(stderr, "-B <boundary marker\n");
         fprintf(stderr, "-f <fixed chunk size in bytes>\n");
         fprintf(stderr, "-d <directory in which to put/retrieve chunks>\n");
         fprintf(stderr, "-s <directory in which to put/retrieve chunk statistics>\n");
@@ -1006,7 +1041,7 @@ public:
         extern char *optarg;
         extern int optind, optopt;
 
-        while ((c = getopt(argc, argv, ":cxprd:o:b:M:m:f:s:l:n:")) != -1) {
+        while ((c = getopt(argc, argv, ":cxprd:o:b:M:m:f:s:l:n:B:")) != -1) {
             switch(c) {
             case 'c':
                 compress = TRUE;
@@ -1035,6 +1070,9 @@ public:
                 break;
             case 'm':
                 minChunkSize = requireInt(optarg);
+                break;
+            case 'B':
+                boundaryMarker = (u_int64_t) requireLongLong(optarg);
                 break;
             case 'f':
                 maxChunkSize = requireInt(optarg);
@@ -1265,8 +1303,11 @@ int main(int argc, char **argv)
 
     MaxChunkBoundaryChecker *cbc;
     if (opts.minChunkSize != 0 && opts.maxChunkSize != 0) {
-        cbc = new SpecifiedChunkBoundaryChecker(opts.bits,
-                                                opts.minChunkSize, opts.maxChunkSize);
+        cbc =
+            new SpecifiedChunkBoundaryChecker(opts.bits,
+                                              opts.minChunkSize,
+                                              opts.maxChunkSize,
+                                              opts.boundaryMarker);
     } else {
         cbc = new BitwiseChunkBoundaryChecker(opts.bits);
     }
